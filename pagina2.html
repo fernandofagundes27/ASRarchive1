@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocxToHTML - Conversor de DOCX para HTML Limpo</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        burgundy: {
+                            900: '#1c0b10',
+                            800: '#2b1219',
+                            700: '#421a26',
+                            600: '#5c2234',
+                            500: '#6b1d2f',
+                            400: '#8c2941',
+                            300: '#b03d58',
+                        },
+                        amberAccent: {
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                            700: '#b45309',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'Monaco', 'Consolas', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Mammoth.js CDN (DOCX parsing + Base64 image embedding) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Estilização customizada da barra de rolagem */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(217, 119, 6, 0.4);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(217, 119, 6, 0.7);
+        }
+
+        /* Efeito de brilho / bordas animadas */
+        .burgundy-gradient {
+            background: linear-gradient(135deg, #6b1d2f 0%, #2b1219 100%);
+        }
+        
+        .amber-glow {
+            box-shadow: 0 0 15px rgba(217, 119, 6, 0.25);
+        }
+
+        /* Estilos do HTML Renderizado na Pré-visualização */
+        .preview-content {
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.7;
+            color: inherit;
+        }
+        .preview-content h1 { font-size: 2rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 0.8rem; line-height: 1.2; }
+        .preview-content h2 { font-size: 1.6rem; font-weight: 600; margin-top: 1.3rem; margin-bottom: 0.7rem; line-height: 1.25; }
+        .preview-content h3 { font-size: 1.3rem; font-weight: 600; margin-top: 1.1rem; margin-bottom: 0.5rem; }
+        .preview-content h4 { font-size: 1.1rem; font-weight: 600; margin-top: 0.9rem; margin-bottom: 0.4rem; }
+        .preview-content p { margin-bottom: 1rem; }
+        .preview-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+        .preview-content ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; }
+        .preview-content li { margin-bottom: 0.25rem; }
+        .preview-content table { border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: 0.95rem; }
+        .preview-content th, .preview-content td { border: 1px solid rgba(120, 120, 120, 0.3); padding: 8px 12px; text-align: left; }
+        .preview-content th { background-color: rgba(217, 119, 6, 0.15); font-weight: 600; }
+        .preview-content img { max-width: 100%; height: auto; display: block; margin: 1.2rem auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .preview-content blockquote { border-left: 4px solid #d97706; padding-left: 1rem; margin: 1rem 0; font-style: italic; opacity: 0.9; }
+        .preview-content a { color: #d97706; text-decoration: underline; text-underline-offset: 3px; }
+        .preview-content code { background-color: rgba(0, 0, 0, 0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+        .dark .preview-content code { background-color: rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body class="bg-amber-50/40 text-gray-800 dark:bg-burgundy-900 dark:text-gray-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
+
+    <!-- Header / Navbar -->
+    <header class="border-b border-amber-200/60 dark:border-burgundy-700 bg-white/80 dark:bg-burgundy-800/80 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-burgundy-500 to-amberAccent-600 flex items-center justify-center text-white shadow-md">
+                    <i class="fa-solid fa-file-code text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight text-burgundy-900 dark:text-amberAccent-500">
+                        DocxToHTML <span class="text-xs px-2 py-0.5 rounded-full bg-amberAccent-600/20 text-amberAccent-600 dark:text-amberAccent-400 font-medium">Pro</span>
+                    </h1>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Conversor local de DOCX para HTML com Base64</p>
+                </div>
+            </div>
+
+            <!-- Botões Superiores -->
+            <div class="flex items-center space-x-3">
+                <!-- Seletor de Tema -->
+                <button id="themeToggleBtn" title="Alternar Tema Escuro/Claro" class="p-2.5 rounded-lg border border-gray-200 dark:border-burgundy-600 bg-gray-50 dark:bg-burgundy-700 text-gray-600 dark:text-amberAccent-400 hover:bg-amber-100 dark:hover:bg-burgundy-600 transition-colors">
+                    <i id="themeIcon" class="fa-solid fa-moon text-base"></i>
+                </button>
+
+                <!-- Reiniciar / Limpar -->
+                <button id="resetBtn" title="Carregar Novo Arquivo" class="hidden flex items-center space-x-2 px-3.5 py-2 rounded-lg border border-gray-200 dark:border-burgundy-600 bg-gray-50 dark:bg-burgundy-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-burgundy-600 transition-colors text-sm font-medium">
+                    <i class="fa-solid fa-arrows-rotate text-amberAccent-600 dark:text-amberAccent-500"></i>
+                    <span class="hidden md:inline">Novo Arquivo</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+
+        <!-- Notificação de Feedback / Mensagens Toast -->
+        <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 ease-out max-w-md bg-gray-900 text-white dark:bg-amberAccent-600 dark:text-burgundy-900 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-amber-500/30">
+            <i id="toastIcon" class="fa-solid fa-circle-check text-xl"></i>
+            <span id="toastMsg" class="text-sm font-medium">Mensagem aqui</span>
+        </div>
+
+        <!-- Área de Upload (Drag and Drop) -->
+        <section id="uploadSection" class="w-full">
+            <div id="dropZone" class="border-2 border-dashed border-amber-500/40 dark:border-burgundy-600 hover:border-amberAccent-600 dark:hover:border-amberAccent-500 bg-white/60 dark:bg-burgundy-800/40 rounded-2xl p-8 sm:p-12 text-center transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl flex flex-col items-center justify-center group relative overflow-hidden">
+                <input type="file" id="fileInput" accept=".docx" class="hidden">
+                
+                <!-- Decoração de Fundo -->
+                <div class="absolute -right-12 -bottom-12 w-48 h-48 bg-amberAccent-600/10 rounded-full blur-2xl group-hover:bg-amberAccent-600/20 transition-all"></div>
+                <div class="absolute -left-12 -top-12 w-48 h-48 bg-burgundy-500/10 rounded-full blur-2xl group-hover:bg-burgundy-500/20 transition-all"></div>
+
+                <!-- Ícone Grande -->
+                <div class="w-20 h-20 mb-5 rounded-2xl bg-amber-100 dark:bg-burgundy-700/80 text-amberAccent-600 dark:text-amberAccent-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                    <i class="fa-solid fa-file-word text-4xl"></i>
+                </div>
+
+                <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">
+                    Arraste & Solte seu arquivo <span class="text-amberAccent-600 dark:text-amberAccent-500">.docx</span> aqui
+                </h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 max-w-md mb-6">
+                    Seu documento será processado 100% no seu navegador. As imagens serão automaticamente convertidas embutidas em código Data URI Base64.
+                </p>
+
+                <button type="button" onclick="document.getElementById('fileInput').click()" class="px-6 py-3 rounded-xl bg-gradient-to-r from-burgundy-500 to-burgundy-600 hover:from-burgundy-600 hover:to-burgundy-700 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center space-x-2 border border-burgundy-400/30">
+                    <i class="fa-solid fa-folder-open text-amberAccent-400"></i>
+                    <span>Selecionar Documento</span>
+                </button>
+
+                <div class="mt-6 flex flex-wrap justify-center gap-4 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200/50 dark:border-burgundy-700/50 pt-4 w-full max-w-md">
+                    <span class="flex items-center space-x-1.5"><i class="fa-solid fa-shield-halved text-amberAccent-600"></i> <span>100% Seguro & Privado</span></span>
+                    <span class="flex items-center space-x-1.5"><i class="fa-solid fa-image text-amberAccent-600"></i> <span>Imagens em Base64</span></span>
+                    <span class="flex items-center space-x-1.5"><i class="fa-solid fa-bolt text-amberAccent-600"></i> <span>Zero Servidor</span></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Spinner de Carregamento -->
+        <div id="loadingSpinner" class="hidden flex-col items-center justify-center py-16">
+            <div class="relative w-16 h-16">
+                <div class="w-16 h-16 rounded-full border-4 border-burgundy-700 border-t-amberAccent-500 animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center text-amberAccent-500 font-bold text-xs">
+                    DOCX
+                </div>
+            </div>
+            <p class="mt-4 font-semibold text-gray-700 dark:text-gray-200">Convertendo documento e codificando imagens...</p>
+            <p class="text-xs text-gray-400 mt-1">Isso pode levar alguns segundos se o documento tiver muitas imagens pesadas.</p>
+        </div>
+
+        <!-- Seção do Resultado (Oculta por padrão) -->
+        <section id="resultSection" class="hidden flex-col gap-4">
+
+            <!-- Painel de Informações & Opções de Exportação -->
+            <div class="bg-white dark:bg-burgundy-800 rounded-2xl p-4 sm:p-5 border border-amber-200/60 dark:border-burgundy-700 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                
+                <!-- Info do Arquivo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-burgundy-700 text-amberAccent-600 dark:text-amberAccent-400 flex items-center justify-center text-2xl flex-shrink-0">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </div>
+                    <div>
+                        <h3 id="fileNameDisplay" class="font-bold text-gray-900 dark:text-white truncate max-w-xs sm:max-w-md">documento.docx</h3>
+                        <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            <span id="fileSizeDisplay"><i class="fa-solid fa-weight-hanging text-amberAccent-600"></i> 0 KB</span>
+                            <span>•</span>
+                            <span id="imgCountDisplay"><i class="fa-regular fa-image text-amberAccent-600"></i> 0 imagens</span>
+                            <span>•</span>
+                            <span id="wordCountDisplay"><i class="fa-solid fa-font text-amberAccent-600"></i> 0 palavras</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botões de Ação Principais -->
+                <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
+                    <!-- Tema da Exportação -->
+                    <div class="flex items-center space-x-1.5 bg-gray-50 dark:bg-burgundy-700/60 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-burgundy-600 text-xs font-medium text-gray-700 dark:text-gray-200">
+                        <i class="fa-solid fa-palette text-amberAccent-500"></i>
+                        <span>Exportar em:</span>
+                        <select id="exportThemeSelect" class="bg-white dark:bg-burgundy-900 text-gray-800 dark:text-amberAccent-400 font-semibold rounded px-2 py-1 border border-gray-300 dark:border-burgundy-600 focus:outline-none focus:ring-1 focus:ring-amberAccent-500 cursor-pointer">
+                            <option value="dark" selected>Modo Escuro (Dark)</option>
+                            <option value="light">Modo Claro (Light)</option>
+                        </select>
+                    </div>
+
+                    <!-- Opções Rápidas de Formatado -->
+                    <label class="flex items-center space-x-2 text-xs font-medium text-gray-600 dark:text-gray-300 mr-2 cursor-pointer bg-gray-50 dark:bg-burgundy-700/60 px-3 py-2 rounded-lg border border-gray-200 dark:border-burgundy-600">
+                        <input type="checkbox" id="fullDocTemplateToggle" checked class="rounded text-amberAccent-600 focus:ring-amberAccent-500 dark:bg-burgundy-900 border-burgundy-600">
+                        <span>Documento Completo (HTML5)</span>
+                    </label>
+
+                    <button id="copyBtn" class="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl border border-amber-600/40 dark:border-amberAccent-600/40 bg-amber-50 dark:bg-burgundy-700 hover:bg-amber-100 dark:hover:bg-burgundy-600 text-amberAccent-700 dark:text-amberAccent-400 font-semibold text-sm transition-colors">
+                        <i class="fa-regular fa-copy"></i>
+                        <span id="copyBtnText">Copiar HTML</span>
+                    </button>
+
+                    <button id="downloadBtn" class="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amberAccent-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all border border-amber-400/30">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Baixar Arquivo HTML</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Abas de Visualização -->
+            <div class="flex items-center border-b border-gray-200 dark:border-burgundy-700 space-x-2">
+                <button id="tabPreviewBtn" class="tab-btn active px-5 py-3 text-sm font-semibold border-b-2 border-amberAccent-600 text-amberAccent-600 dark:text-amberAccent-400 flex items-center space-x-2 transition-all">
+                    <i class="fa-regular fa-eye"></i>
+                    <span>Pré-visualização (Renderizado)</span>
+                </button>
+                <button id="tabCodeBtn" class="tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex items-center space-x-2 transition-all">
+                    <i class="fa-solid fa-code"></i>
+                    <span>Código HTML</span>
+                </button>
+            </div>
+
+            <!-- Conteúdo da Aba 1: Pré-visualização -->
+            <div id="previewTab" class="w-full">
+                <!-- Seletor visual para simular fundo claro/escuro na pré-visualização -->
+                <div class="flex items-center justify-between mb-2 px-1 text-xs text-gray-500 dark:text-gray-400">
+                    <span>Fundo da pré-visualização:</span>
+                    <div class="flex space-x-1">
+                        <button onclick="setPreviewBg('white')" class="px-2.5 py-1 rounded border border-gray-300 bg-white text-gray-800 font-medium">Claro</button>
+                        <button onclick="setPreviewBg('dark')" class="px-2.5 py-1 rounded border border-burgundy-600 bg-burgundy-900 text-white font-medium">Escuro</button>
+                    </div>
+                </div>
+
+                <div id="previewContainerWrapper" class="bg-white dark:bg-burgundy-800/90 rounded-2xl p-6 sm:p-10 border border-amber-200/60 dark:border-burgundy-700 shadow-inner min-h-[450px] max-h-[700px] overflow-y-auto transition-colors">
+                    <div id="previewContainer" class="preview-content max-w-4xl mx-auto">
+                        <!-- Conteúdo inserido dinamicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conteúdo da Aba 2: Código Fonte -->
+            <div id="codeTab" class="hidden w-full">
+                <div class="relative bg-gray-950 rounded-2xl border border-burgundy-700 overflow-hidden shadow-2xl">
+                    <!-- Cabeçalho do Código -->
+                    <div class="flex items-center justify-between px-4 py-2.5 bg-burgundy-950/80 border-b border-burgundy-800 text-xs text-gray-400 font-mono">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+                            <span class="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
+                            <span class="w-3 h-3 rounded-full bg-green-500/80 inline-block"></span>
+                            <span class="ml-2">output.html</span>
+                        </div>
+                        <span>UTF-8 • HTML5</span>
+                    </div>
+
+                    <!-- Textarea do Código -->
+                    <textarea id="codeTextarea" readonly class="w-full h-[550px] p-4 bg-gray-950 text-amber-400 font-mono text-xs sm:text-sm resize-none focus:outline-none leading-relaxed overflow-y-auto"></textarea>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="mt-auto border-t border-amber-200/60 dark:border-burgundy-800 py-4 text-center text-xs text-gray-500 dark:text-gray-400">
+        <p>DocxToHTML • Processamento 100% Client-Side. Nenhum dado ou arquivo é enviado a servidores externos.</p>
+    </footer>
+
+    <!-- Script JavaScript Principal -->
+    <script>
+        // Estado Global da Aplicação
+        const state = {
+            rawHtml: '',
+            fullHtml: '',
+            fileName: 'documento',
+            imageCount: 0,
+            wordCount: 0,
+            fileSizeFormatted: '0 KB',
+            activeTab: 'preview'
+        };
+
+        // Elementos DOM
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadSection = document.getElementById('uploadSection');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const resultSection = document.getElementById('resultSection');
+        const resetBtn = document.getElementById('resetBtn');
+
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const fileSizeDisplay = document.getElementById('fileSizeDisplay');
+        const imgCountDisplay = document.getElementById('imgCountDisplay');
+        const wordCountDisplay = document.getElementById('wordCountDisplay');
+
+        const previewContainer = document.getElementById('previewContainer');
+        const previewContainerWrapper = document.getElementById('previewContainerWrapper');
+        const codeTextarea = document.getElementById('codeTextarea');
+
+        const tabPreviewBtn = document.getElementById('tabPreviewBtn');
+        const tabCodeBtn = document.getElementById('tabCodeBtn');
+        const previewTab = document.getElementById('previewTab');
+        const codeTab = document.getElementById('codeTab');
+
+        const copyBtn = document.getElementById('copyBtn');
+        const copyBtnText = document.getElementById('copyBtnText');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const fullDocTemplateToggle = document.getElementById('fullDocTemplateToggle');
+        const exportThemeSelect = document.getElementById('exportThemeSelect');
+
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        const themeIcon = document.getElementById('themeIcon');
+
+        // Inicialização dos Eventos
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            setupDragAndDrop();
+            setupEventListeners();
+        });
+
+        // 1. Alternância de Tema (Escuro / Claro)
+        function initTheme() {
+            const isDark = localStorage.getItem('theme') !== 'light';
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+                themeIcon.className = 'fa-solid fa-sun text-amberAccent-400';
+            } else {
+                document.documentElement.classList.remove('dark');
+                themeIcon.className = 'fa-solid fa-moon text-burgundy-900';
+            }
+        }
+
+        themeToggleBtn.addEventListener('click', () => {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            themeIcon.className = isDark ? 'fa-solid fa-sun text-amberAccent-400' : 'fa-solid fa-moon text-burgundy-900';
+        });
+
+        // 2. Drag and Drop Handler
+        function setupDragAndDrop() {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.add('border-amberAccent-500', 'bg-amber-100/30', 'dark:bg-burgundy-700/50', 'scale-[1.01]');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.remove('border-amberAccent-500', 'bg-amber-100/30', 'dark:bg-burgundy-700/50', 'scale-[1.01]');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+        }
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // 3. Processamento do Arquivo DOCX via Mammoth.js
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.docx')) {
+                showToast('Por favor, selecione um arquivo válido no formato .docx', 'error');
+                return;
+            }
+
+            state.fileName = file.name.replace(/\.[^/.]+$/, "");
+            state.fileSizeFormatted = formatBytes(file.size);
+
+            // Exibir Spinner
+            uploadSection.classList.add('hidden');
+            loadingSpinner.classList.remove('hidden');
+            loadingSpinner.classList.add('flex');
+
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const arrayBuffer = e.target.result;
+
+                // Configurações do Mammoth
+                // O Mammoth converte automaticamente imagens embutidas do Word para tags <img src="data:image/png;base64,..."> em HTML
+                mammoth.convertToHtml({ arrayBuffer: arrayBuffer })
+                    .then(result => {
+                        state.rawHtml = result.value;
+                        
+                        // Calcular Estatísticas (Imagens e Palavras)
+                        analyzeHtml(state.rawHtml);
+
+                        // Montar código completo
+                        updateFullHtml();
+
+                        // Renderizar na UI
+                        renderResult();
+
+                        showToast('Documento convertido com sucesso!');
+                    })
+                    .catch(err => {
+                        console.error("Erro Mammoth:", err);
+                        showToast('Erro ao converter arquivo .docx. Verifique se o arquivo não está corrompido.', 'error');
+                        resetApp();
+                    })
+                    .finally(() => {
+                        loadingSpinner.classList.add('hidden');
+                        loadingSpinner.classList.remove('flex');
+                    });
+            };
+
+            reader.onerror = function() {
+                showToast('Erro ao ler o arquivo.', 'error');
+                resetApp();
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 4. Análise de Estatísticas
+        function analyzeHtml(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Contar imagens embutidas
+            const imgs = doc.querySelectorAll('img');
+            state.imageCount = imgs.length;
+
+            // Contar palavras
+            const textContent = doc.body.textContent || "";
+            const words = textContent.trim().split(/\s+/).filter(w => w.length > 0);
+            state.wordCount = words.length;
+        }
+
+        // 5. Gerar Template de Documento HTML Completo
+        function updateFullHtml() {
+            const isDarkExport = exportThemeSelect ? exportThemeSelect.value === 'dark' : true;
+
+            if (fullDocTemplateToggle.checked) {
+                if (isDarkExport) {
+                    state.fullHtml = `<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(state.fileName)}</title>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.75;
+            color: #e4e4e7;
+            background-color: #121214;
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #ffffff;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-top: 1.6em;
+            margin-bottom: 0.6em;
+        }
+        h1 { font-size: 2.25rem; border-bottom: 2px solid #27272a; padding-bottom: 0.4rem; }
+        h2 { font-size: 1.75rem; border-bottom: 1px solid #1f1f23; padding-bottom: 0.3rem; }
+        h3 { font-size: 1.35rem; }
+        h4 { font-size: 1.15rem; }
+        p { margin-bottom: 1.2rem; }
+        ul, ol { padding-left: 1.8rem; margin-bottom: 1.2rem; }
+        li { margin-bottom: 0.3rem; }
+        table { border-collapse: collapse; width: 100%; margin: 1.5rem 0; font-size: 0.95rem; }
+        th, td { border: 1px solid #27272a; padding: 10px 14px; text-align: left; }
+        th { background-color: #1c1c20; color: #fbbf24; font-weight: 600; }
+        tr:nth-child(even) td { background-color: rgba(255, 255, 255, 0.02); }
+        img { max-width: 100%; height: auto; display: block; margin: 1.5rem auto; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+        blockquote { border-left: 4px solid #f59e0b; background-color: rgba(245, 158, 11, 0.06); padding: 0.8rem 1.2rem; margin: 1.2rem 0; color: #d4d4d8; font-style: italic; border-radius: 0 8px 8px 0; }
+        a { color: #fbbf24; text-decoration: underline; text-underline-offset: 3px; }
+        a:hover { color: #f59e0b; }
+        code { background: #27272a; color: #fef08a; padding: 2px 7px; border-radius: 4px; font-family: 'Fira Code', Consolas, monospace; font-size: 0.9em; }
+        pre { background: #18181b; padding: 1rem; border-radius: 8px; overflow-x: auto; border: 1px solid #27272a; }
+        hr { border: 0; height: 1px; background: #27272a; margin: 2rem 0; }
+    </style>
+</head>
+<body>
+${state.rawHtml}
+</body>
+</html>`;
+                } else {
+                    state.fullHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(state.fileName)}</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.7;
+            color: #222222;
+            background-color: #ffffff;
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #111111;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-top: 1.6em;
+            margin-bottom: 0.6em;
+        }
+        h1 { font-size: 2.25rem; border-bottom: 2px solid #f0f0f0; padding-bottom: 0.4rem; }
+        h2 { font-size: 1.75rem; }
+        h3 { font-size: 1.35rem; }
+        p { margin-bottom: 1.2rem; }
+        ul, ol { padding-left: 1.8rem; margin-bottom: 1.2rem; }
+        li { margin-bottom: 0.3rem; }
+        table { border-collapse: collapse; width: 100%; margin: 1.5rem 0; font-size: 0.95rem; }
+        th, td { border: 1px solid #dddddd; padding: 10px 14px; text-align: left; }
+        th { background-color: #f8f9fa; font-weight: 600; }
+        img { max-width: 100%; height: auto; display: block; margin: 1.5rem auto; border-radius: 6px; }
+        blockquote { border-left: 4px solid #d97706; padding-left: 1rem; margin: 1.2rem 0; color: #555555; font-style: italic; }
+        a { color: #d97706; text-decoration: underline; }
+        code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+${state.rawHtml}
+</body>
+</html>`;
+                }
+            } else {
+                state.fullHtml = state.rawHtml;
+            }
+
+            codeTextarea.value = state.fullHtml;
+        }
+
+        // 6. Exibição dos Resultados
+        function renderResult() {
+            fileNameDisplay.textContent = `${state.fileName}.docx`;
+            fileSizeDisplay.innerHTML = `<i class="fa-solid fa-weight-hanging text-amberAccent-600"></i> ${state.fileSizeFormatted}`;
+            imgCountDisplay.innerHTML = `<i class="fa-regular fa-image text-amberAccent-600"></i> ${state.imageCount} imagem(ns)`;
+            wordCountDisplay.innerHTML = `<i class="fa-solid fa-font text-amberAccent-600"></i> ${state.wordCount} palavra(s)`;
+
+            previewContainer.innerHTML = state.rawHtml || '<p class="text-gray-400 italic">O documento parece estar vazio.</p>';
+            
+            resultSection.classList.remove('hidden');
+            resultSection.classList.add('flex');
+            resetBtn.classList.remove('hidden');
+        }
+
+        // 7. Configuração dos Eventos Globais
+        function setupEventListeners() {
+            // Alternar Abas
+            tabPreviewBtn.addEventListener('click', () => switchTab('preview'));
+            tabCodeBtn.addEventListener('click', () => switchTab('code'));
+
+            // Checkbox de Template Completo & Seletor de Tema de Exportação
+            fullDocTemplateToggle.addEventListener('change', updateFullHtml);
+            if (exportThemeSelect) {
+                exportThemeSelect.addEventListener('change', () => {
+                    updateFullHtml();
+                    if (exportThemeSelect.value === 'dark') {
+                        setPreviewBg('dark');
+                    } else {
+                        setPreviewBg('white');
+                    }
+                });
+            }
+
+            // Botão Copiar
+            copyBtn.addEventListener('click', copyHtmlToClipboard);
+
+            // Botão Download
+            downloadBtn.addEventListener('click', downloadHtmlFile);
+
+            // Botão Reiniciar
+            resetBtn.addEventListener('click', resetApp);
+        }
+
+        function switchTab(tab) {
+            state.activeTab = tab;
+            if (tab === 'preview') {
+                tabPreviewBtn.className = 'tab-btn active px-5 py-3 text-sm font-semibold border-b-2 border-amberAccent-600 text-amberAccent-600 dark:text-amberAccent-400 flex items-center space-x-2 transition-all';
+                tabCodeBtn.className = 'tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex items-center space-x-2 transition-all';
+                previewTab.classList.remove('hidden');
+                codeTab.classList.add('hidden');
+            } else {
+                tabCodeBtn.className = 'tab-btn active px-5 py-3 text-sm font-semibold border-b-2 border-amberAccent-600 text-amberAccent-600 dark:text-amberAccent-400 flex items-center space-x-2 transition-all';
+                tabPreviewBtn.className = 'tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex items-center space-x-2 transition-all';
+                codeTab.classList.remove('hidden');
+                previewTab.classList.add('hidden');
+            }
+        }
+
+        // Alternar Fundo do Preview
+        function setPreviewBg(mode) {
+            if (mode === 'white') {
+                previewContainerWrapper.className = "bg-white text-gray-900 rounded-2xl p-6 sm:p-10 border border-gray-300 shadow-inner min-h-[450px] max-h-[700px] overflow-y-auto transition-colors";
+            } else {
+                previewContainerWrapper.className = "bg-burgundy-900 text-gray-100 rounded-2xl p-6 sm:p-10 border border-burgundy-700 shadow-inner min-h-[450px] max-h-[700px] overflow-y-auto transition-colors";
+            }
+        }
+
+        // 8. Copiar Código HTML para Área de Transferência
+        function copyHtmlToClipboard() {
+            const textToCopy = state.fullHtml;
+
+            // Método fallback usando textarea temporária (Compatível com iFrames)
+            const tempTextarea = document.createElement('textarea');
+            tempTextarea.value = textToCopy;
+            document.body.appendChild(tempTextarea);
+            tempTextarea.select();
+            
+            try {
+                document.execCommand('copy');
+                copyBtnText.textContent = 'Copiado!';
+                copyBtn.classList.add('border-green-500', 'text-green-500');
+                showToast('Código HTML copiado para a área de transferência!');
+
+                setTimeout(() => {
+                    copyBtnText.textContent = 'Copiar HTML';
+                    copyBtn.classList.remove('border-green-500', 'text-green-500');
+                }, 2500);
+            } catch (err) {
+                showToast('Não foi possível copiar o código automaticamente.', 'error');
+            } finally {
+                document.body.removeChild(tempTextarea);
+            }
+        }
+
+        // 9. Fazer Download do Arquivo HTML Único
+        function downloadHtmlFile() {
+            const blob = new Blob([state.fullHtml], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            
+            a.href = url;
+            a.download = `${state.fileName}.html`;
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+
+            showToast('Download do arquivo HTML iniciado!');
+        }
+
+        // 10. Reiniciar Aplicação
+        function resetApp() {
+            state.rawHtml = '';
+            state.fullHtml = '';
+            state.fileName = 'documento';
+            state.imageCount = 0;
+            state.wordCount = 0;
+            fileInput.value = '';
+
+            resultSection.classList.add('hidden');
+            resultSection.classList.remove('flex');
+            uploadSection.classList.remove('hidden');
+            resetBtn.classList.add('hidden');
+
+            switchTab('preview');
+        }
+
+        // Auxiliares (Toasts, Bytes, Escaping)
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.textContent = message;
+
+            if (type === 'error') {
+                toastIcon.className = 'fa-solid fa-circle-exclamation text-xl text-red-400';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-check text-xl text-amberAccent-400';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
+
+        function formatBytes(bytes, decimals = 1) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function escapeHtml(string) {
+            return String(string).replace(/[&<>"']/g, function(s) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[s];
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <!-- 1. Garante a escala correta para dispositivos móveis -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meu Site</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    /* 2. Layout Flexbox usando 100dvh (Dynamic Viewport Height) */
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh; 
+    }
+    /* 3. Barra de navegação adaptada para toque */
+    nav {
+      background: #1a1a1a;
+      padding: 10px 14px;
+      display: flex;
+      gap: 10px;
+      overflow-x: auto; /* Permite deslizar o menu para os lados se houver muitos botões */
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Botões do menu com área de toque ampliada */
+    nav a {
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 8px 14px;
+      background: #2a2a2a;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    nav a:active {
+      background: #444444;
+    }
+    /* 4. O iframe ocupa 100% do espaço restante na tela */
+    iframe {
+      flex: 1;
+      width: 100%;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="pagina1.html" target="janela">Página 1</a>
+    <a href="pagina2.html" target="janela">Página 2</a>
+  </nav>
+
+  <iframe name="janela" src="pagina1.html"></iframe>
+
+</body>
+</html>
